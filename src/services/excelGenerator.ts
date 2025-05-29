@@ -64,31 +64,47 @@ function createAssumptionsSheet(workbook: ExcelJS.Workbook, deal: any, inputs: a
   sheet.getCell('B2').value = 'ASSUMPTIONS';
   sheet.getCell('B2').font = { bold: true, size: 16 };
   
-  sheet.getCell('B4').value = 'Transaction Assumptions';
+  // Deal Information
+  sheet.getCell('B4').value = 'Deal Information';
   sheet.getCell('B4').font = { bold: true, size: 12 };
+  
+  sheet.getCell('B5').value = 'Deal Type';
+  sheet.getCell('G5').value = deal.dealType || 'Business Acquisition';
+  
+  sheet.getCell('B6').value = 'Sector/Industry';
+  sheet.getCell('G6').value = deal.sector || 'Technology';
+  
+  sheet.getCell('B7').value = 'Business Model';
+  sheet.getCell('G7').value = deal.businessModel || 'Manufacturing';
+  
+  sheet.getCell('B8').value = 'Geography';
+  sheet.getCell('G8').value = deal.geography || 'United States';
   
   // Transaction inputs (Column G)
   sheet.getCell('B10').value = 'Acquisition Date';
-  sheet.getCell('G10').value = new Date(inputs.revenue.baseYear, 0, 1);
+  sheet.getCell('G10').value = new Date(deal.acquisitionDate || inputs.revenue.baseYear);
   sheet.getCell('G10').numFmt = 'dd/mm/yyyy';
   
   sheet.getCell('B11').value = 'Holding Period (months)';
-  sheet.getCell('G11').value = inputs.exit.exitYear * 12;
+  sheet.getCell('G11').value = deal.holdingPeriodMonths || inputs.exit.exitYear * 12;
+  
+  sheet.getCell('B12').value = 'Reporting Frequency';
+  sheet.getCell('G12').value = deal.reportingFrequency || 'monthly';
   
   sheet.getCell('B13').value = 'Transaction Fees %';
-  sheet.getCell('G13').value = 0.015;
+  sheet.getCell('G13').value = deal.transactionFees || 0.015;
   sheet.getCell('G13').numFmt = '0.0%';
   
   sheet.getCell('B14').value = 'LTV Ratio';
-  sheet.getCell('G14').value = inputs.financing.debtAmount / (inputs.financing.debtAmount + inputs.financing.equityAmount);
+  sheet.getCell('G14').value = deal.acquisitionLTV || inputs.financing.debtAmount / (inputs.financing.debtAmount + inputs.financing.equityAmount);
   sheet.getCell('G14').numFmt = '0.0%';
   
   sheet.getCell('B17').value = 'Base Interest Rate';
-  sheet.getCell('G17').value = 0.01;
+  sheet.getCell('G17').value = deal.baseRate || 0.01;
   sheet.getCell('G17').numFmt = '0.0%';
   
   sheet.getCell('B18').value = 'Interest Spread';
-  sheet.getCell('G18').value = inputs.financing.interestRate - 0.01;
+  sheet.getCell('G18').value = deal.interestRateMargin || inputs.financing.interestRate - 0.01;
   sheet.getCell('G18').numFmt = '0.0%';
   
   // Transaction calculations (Column N)
@@ -120,7 +136,7 @@ function createAssumptionsSheet(workbook: ExcelJS.Workbook, deal: any, inputs: a
   sheet.getCell('B20').font = { bold: true, size: 12 };
   
   sheet.getCell('B22').value = 'Revenue Growth Rate';
-  sheet.getCell('G22').value = inputs.revenue.growthRate;
+  sheet.getCell('G22').value = deal.revenueGrowth || inputs.revenue.growthRate;
   sheet.getCell('G22').numFmt = '0.0%';
   
   sheet.getCell('B23').value = 'COGS % of Revenue';
@@ -139,13 +155,41 @@ function createAssumptionsSheet(workbook: ExcelJS.Workbook, deal: any, inputs: a
   sheet.getCell('G27').value = 0.25;
   sheet.getCell('G27').numFmt = '0.0%';
   
-  // Exit Assumptions
-  sheet.getCell('B30').value = 'Exit Assumptions';
-  sheet.getCell('B30').font = { bold: true, size: 12 };
+  // Cost Items
+  sheet.getCell('B29').value = 'Annual Cost Items';
+  sheet.getCell('B29').font = { bold: true, size: 12 };
   
-  sheet.getCell('B32').value = 'Exit Multiple';
-  sheet.getCell('G32').value = inputs.exit.exitMultiple;
-  sheet.getCell('G32').numFmt = '0.0x';
+  sheet.getCell('B31').value = 'Staff Expenses';
+  sheet.getCell('G31').value = deal.staffExpenses || 60000;
+  sheet.getCell('G31').numFmt = '$#,##0';
+  
+  sheet.getCell('B32').value = 'Salary Growth (p.a.)';
+  sheet.getCell('G32').value = deal.salaryGrowth || 0.005;
+  sheet.getCell('G32').numFmt = '0.0%';
+  
+  // Add other cost items
+  let rowNum = 34;
+  if (deal.costItems && deal.costItems.length > 0) {
+    deal.costItems.forEach((item: any, index: number) => {
+      sheet.getCell(`B${rowNum + index}`).value = item.name || `Cost Item ${index + 1}`;
+      sheet.getCell(`G${rowNum + index}`).value = item.amount || 0;
+      sheet.getCell(`G${rowNum + index}`).numFmt = '$#,##0';
+    });
+    rowNum += deal.costItems.length;
+  }
+  
+  // Exit Assumptions
+  rowNum += 2;
+  sheet.getCell(`B${rowNum}`).value = 'Exit Assumptions';
+  sheet.getCell(`B${rowNum}`).font = { bold: true, size: 12 };
+  
+  sheet.getCell(`B${rowNum + 2}`).value = 'Disposal Costs %';
+  sheet.getCell(`G${rowNum + 2}`).value = deal.disposalCosts || 0.005;
+  sheet.getCell(`G${rowNum + 2}`).numFmt = '0.0%';
+  
+  sheet.getCell(`B${rowNum + 3}`).value = 'Terminal Multiple';
+  sheet.getCell(`G${rowNum + 3}`).value = deal.terminalMultiple || inputs.exit.exitMultiple;
+  sheet.getCell(`G${rowNum + 3}`).numFmt = '0.0x';
   
   // Revenue Base
   sheet.getCell('M20').value = 'Revenue Base';
@@ -178,20 +222,23 @@ function createDebtModelSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('B11').value = 'Repayment';
   sheet.getCell('B12').value = 'Closing Balance';
   
-  // Set up periods based on holding period
-  const holdingPeriod = inputs.exit.exitYear * 12;
+  // Set up periods based on holding period and reporting frequency
+  const isMonthly = inputs.reportingFrequency === 'monthly';
+  const holdingPeriodMonths = inputs.holdingPeriodMonths || inputs.exit.exitYear * 12;
+  const numPeriods = isMonthly ? holdingPeriodMonths : Math.ceil(holdingPeriodMonths / 12);
   
   // Period 0 (acquisition)
   sheet.getCell('C3').value = { formula: '=Assumptions!G10' };
   sheet.getCell('C3').numFmt = 'mmm-yy';
   sheet.getCell('C4').value = 0;
   
-  // Create monthly periods
-  for (let i = 1; i <= holdingPeriod; i++) {
+  // Create periods
+  for (let i = 1; i <= numPeriods; i++) {
     const col = String.fromCharCode(67 + i); // D, E, F, etc.
     
     // Date
-    sheet.getCell(`${col}3`).value = { formula: `=EDATE(${String.fromCharCode(66 + i)}3,1)` };
+    const monthsToAdd = isMonthly ? 1 : 12;
+    sheet.getCell(`${col}3`).value = { formula: `=EDATE(${String.fromCharCode(66 + i)}3,${monthsToAdd})` };
     sheet.getCell(`${col}3`).numFmt = 'mmm-yy';
     
     // Period number
@@ -199,7 +246,7 @@ function createDebtModelSheet(workbook: ExcelJS.Workbook, inputs: any) {
   }
   
   // Interest rate (constant across all periods)
-  for (let i = 0; i <= holdingPeriod; i++) {
+  for (let i = 0; i <= numPeriods; i++) {
     const col = String.fromCharCode(67 + i);
     sheet.getCell(`${col}6`).value = { formula: '=Assumptions!G17+Assumptions!G18' };
     sheet.getCell(`${col}6`).numFmt = '0.00%';
@@ -214,20 +261,21 @@ function createDebtModelSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('C12').value = { formula: '=C8+C9-C10-C11' };
   
   // Subsequent periods
-  for (let i = 1; i <= holdingPeriod; i++) {
+  const periodsPerYear = isMonthly ? 12 : 1;
+  for (let i = 1; i <= numPeriods; i++) {
     const col = String.fromCharCode(67 + i);
     const prevCol = String.fromCharCode(66 + i);
     
     sheet.getCell(`${col}8`).value = { formula: `=${prevCol}12` };
     sheet.getCell(`${col}9`).value = 0;
-    sheet.getCell(`${col}10`).value = { formula: `=${col}8*${col}6/12` };
-    sheet.getCell(`${col}11`).value = i === holdingPeriod ? { formula: `=${col}8` } : 0;
+    sheet.getCell(`${col}10`).value = { formula: `=${col}8*${col}6/${periodsPerYear}` };
+    sheet.getCell(`${col}11`).value = i === numPeriods ? { formula: `=${col}8` } : 0;
     sheet.getCell(`${col}12`).value = { formula: `=${col}8+${col}9-${col}10-${col}11` };
   }
   
   // Format numbers
   for (let row = 8; row <= 12; row++) {
-    for (let i = 0; i <= holdingPeriod; i++) {
+    for (let i = 0; i <= numPeriods; i++) {
       const col = String.fromCharCode(67 + i);
       sheet.getCell(`${col}${row}`).numFmt = '$#,##0';
     }
