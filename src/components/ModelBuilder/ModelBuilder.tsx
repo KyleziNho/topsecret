@@ -13,26 +13,31 @@ interface ModelBuilderProps {
 export function ModelBuilder({ deal, onOpenChat }: ModelBuilderProps) {
   const [modelInputs, setModelInputs] = useState({
     revenue: {
-      baseYear: new Date().getFullYear(),
-      baseRevenue: 100,
-      growthRate: 0.1,
-      years: 5,
+      baseYear: deal.revenue?.baseYear || new Date().getFullYear(),
+      baseRevenue: deal.revenue?.baseRevenue || 100,
+      growthRate: deal.revenueGrowth || deal.revenue?.growthRate || 0.1,
+      years: Math.ceil((deal.holdingPeriodMonths || 24) / 12),
     },
     costs: {
-      cogs: 0.6,
-      opex: 0.2,
-      capex: 0.05,
+      cogs: deal.costs?.cogs || 0.6,
+      opex: deal.costs?.opex || 0.2,
+      capex: deal.costs?.capex || 0.05,
     },
     financing: {
-      debtAmount: parseFloat(deal.dealSize) * 0.6,
-      interestRate: 0.08,
-      term: 7,
-      equityAmount: parseFloat(deal.dealSize) * 0.4,
+      debtAmount: deal.financing?.debtAmount || parseFloat(deal.dealSize || '0') * (deal.acquisitionLTV || 0.6),
+      interestRate: deal.financing?.interestRate || (deal.baseRate || 0.01) + (deal.interestRateMargin || 0.02),
+      term: deal.financing?.term || 7,
+      equityAmount: deal.financing?.equityAmount || parseFloat(deal.dealSize || '0') * (1 - (deal.acquisitionLTV || 0.6)),
     },
     exit: {
-      exitMultiple: 12,
-      exitYear: 5,
+      exitMultiple: deal.terminalMultiple || deal.exit?.exitMultiple || 12,
+      exitYear: Math.ceil((deal.holdingPeriodMonths || 24) / 12),
     },
+    // Add new properties from deal form
+    reportingFrequency: deal.reportingFrequency || 'monthly',
+    holdingPeriodMonths: deal.holdingPeriodMonths || 24,
+    acquisitionDate: deal.acquisitionDate,
+    currency: deal.currency || '$',
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -40,9 +45,15 @@ export function ModelBuilder({ deal, onOpenChat }: ModelBuilderProps) {
   const handleGenerateModel = async () => {
     setIsGenerating(true);
     try {
-      await generateExcelModel(deal, modelInputs);
+      // Pass both deal data and model inputs with all the form data
+      const fullInputs = {
+        ...modelInputs,
+        ...deal, // Include all deal form data
+      };
+      await generateExcelModel(deal, fullInputs);
     } catch (error) {
       console.error('Error generating model:', error);
+      alert('Error generating Excel file. Please check your inputs and try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -54,7 +65,7 @@ export function ModelBuilder({ deal, onOpenChat }: ModelBuilderProps) {
         <div>
           <h1 className="text-3xl font-bold text-gray-100">{deal.name} - Financial Model</h1>
           <p className="text-gray-400 mt-1">
-            {deal.company} • ${deal.dealSize} {deal.dealType.toUpperCase()}
+            {deal.company || deal.name} • {deal.currency || '$'}{parseFloat(deal.dealSize || '0').toFixed(0)}M {(deal.dealType || 'acquisition').toUpperCase()}
           </p>
         </div>
         <div className="flex gap-3">

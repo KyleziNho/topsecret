@@ -8,6 +8,10 @@ export async function generateExcelModel(deal: any, inputs: any) {
   workbook.created = new Date();
   workbook.modified = new Date();
 
+  // Debug log to check data structure
+  console.log('Deal data:', deal);
+  console.log('Inputs data:', inputs);
+
   // Create sheets in exact order
   createDisclaimerSheet(workbook);
   createAssumptionsSheet(workbook, deal, inputs);
@@ -112,7 +116,7 @@ function createAssumptionsSheet(workbook: ExcelJS.Workbook, deal: any, inputs: a
   sheet.getCell('M4').font = { bold: true, size: 12 };
   
   sheet.getCell('M10').value = 'Purchase Price';
-  sheet.getCell('N10').value = parseFloat(deal.dealSize) * 1000000;
+  sheet.getCell('N10').value = parseFloat(deal.dealSize || deal.purchasePrice || '0') * 1000000;
   sheet.getCell('N10').numFmt = '$#,##0';
   
   sheet.getCell('M11').value = 'Transaction Fees';
@@ -224,7 +228,7 @@ function createDebtModelSheet(workbook: ExcelJS.Workbook, inputs: any) {
   
   // Set up periods based on holding period and reporting frequency
   const isMonthly = inputs.reportingFrequency === 'monthly';
-  const holdingPeriodMonths = inputs.holdingPeriodMonths || inputs.exit.exitYear * 12;
+  const holdingPeriodMonths = inputs.holdingPeriodMonths || deal.holdingPeriodMonths || inputs.exit?.exitYear * 12 || 24;
   const numPeriods = isMonthly ? holdingPeriodMonths : Math.ceil(holdingPeriodMonths / 12);
   
   // Period 0 (acquisition)
@@ -332,7 +336,9 @@ function createPLSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('B1').value = 'PROFIT & LOSS STATEMENT';
   sheet.getCell('B1').font = { bold: true, size: 16 };
   
-  const holdingPeriod = inputs.exit.exitYear * 12;
+  const isMonthly = inputs.reportingFrequency === 'monthly';
+  const holdingPeriodMonths = inputs.holdingPeriodMonths || inputs.exit?.exitYear * 12 || 24;
+  const holdingPeriod = isMonthly ? holdingPeriodMonths : Math.ceil(holdingPeriodMonths / 12);
   
   // Headers
   sheet.getCell('B5').value = 'Period End Date';
@@ -343,11 +349,12 @@ function createPLSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('D5').numFmt = 'mmm-yy';
   sheet.getCell('D6').value = 0;
   
-  // Monthly periods
+  // Periods
   for (let i = 1; i <= holdingPeriod; i++) {
     const col = String.fromCharCode(68 + i); // E, F, G, etc.
     
-    sheet.getCell(`${col}5`).value = { formula: `=EDATE(${String.fromCharCode(67 + i)}5,1)` };
+    const monthsToAdd = isMonthly ? 1 : 12;
+    sheet.getCell(`${col}5`).value = { formula: `=EDATE(${String.fromCharCode(67 + i)}5,${monthsToAdd})` };
     sheet.getCell(`${col}5`).numFmt = 'mmm-yy';
     sheet.getCell(`${col}6`).value = i;
   }
@@ -356,16 +363,18 @@ function createPLSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('B7').value = 'Revenue';
   sheet.getCell('B7').font = { bold: true };
   
-  sheet.getCell('B8').value = 'Monthly Revenue';
-  sheet.getCell('D8').value = { formula: '=Assumptions!N22/12' }; // Year 0 monthly
+  sheet.getCell('B8').value = isMonthly ? 'Monthly Revenue' : 'Annual Revenue';
+  const revenueDivisor = isMonthly ? 12 : 1;
+  sheet.getCell('D8').value = { formula: `=Assumptions!N22/${revenueDivisor}` };
   
   for (let i = 1; i <= holdingPeriod; i++) {
     const col = String.fromCharCode(68 + i);
     const prevCol = String.fromCharCode(67 + i);
     
-    // Apply monthly growth rate
+    // Apply growth rate based on reporting frequency
+    const growthDivisor = isMonthly ? 12 : 1;
     sheet.getCell(`${col}8`).value = { 
-      formula: `=${prevCol}8*(1+Assumptions!G22/12)` 
+      formula: `=${prevCol}8*(1+Assumptions!G22/${growthDivisor})` 
     };
   }
   
@@ -448,7 +457,9 @@ function createCFStatementSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('B1').value = 'CASH FLOW STATEMENT';
   sheet.getCell('B1').font = { bold: true, size: 16 };
   
-  const holdingPeriod = inputs.exit.exitYear * 12;
+  const isMonthly = inputs.reportingFrequency === 'monthly';
+  const holdingPeriodMonths = inputs.holdingPeriodMonths || inputs.exit?.exitYear * 12 || 24;
+  const holdingPeriod = isMonthly ? holdingPeriodMonths : Math.ceil(holdingPeriodMonths / 12);
   
   // Unlevered Cash Flows
   sheet.getCell('B3').value = 'Unlevered Cash Flows';
@@ -577,7 +588,9 @@ function createNPVSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('B10').value = 'NPV Analysis';
   sheet.getCell('B10').font = { bold: true };
   
-  const holdingPeriod = inputs.exit.exitYear * 12;
+  const isMonthly = inputs.reportingFrequency === 'monthly';
+  const holdingPeriodMonths = inputs.holdingPeriodMonths || inputs.exit?.exitYear * 12 || 24;
+  const holdingPeriod = isMonthly ? holdingPeriodMonths : Math.ceil(holdingPeriodMonths / 12);
   const exitCol = String.fromCharCode(68 + holdingPeriod);
   
   sheet.getCell('B12').value = 'NPV (Unlevered)';
