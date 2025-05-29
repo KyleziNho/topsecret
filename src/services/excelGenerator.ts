@@ -8,9 +8,10 @@ export async function generateExcelModel(deal: any, inputs: any) {
   workbook.created = new Date();
   workbook.modified = new Date();
 
-  // Debug log to check data structure
-  console.log('Deal data:', deal);
-  console.log('Inputs data:', inputs);
+  // Ensure we have valid data
+  if (!deal || !inputs) {
+    throw new Error('Missing deal or inputs data');
+  }
 
   // Create sheets in exact order
   createDisclaimerSheet(workbook);
@@ -86,7 +87,8 @@ function createAssumptionsSheet(workbook: ExcelJS.Workbook, deal: any, inputs: a
   
   // Transaction inputs (Column G)
   sheet.getCell('B10').value = 'Acquisition Date';
-  sheet.getCell('G10').value = new Date(deal.acquisitionDate || inputs.revenue.baseYear);
+  const acquisitionDate = deal.acquisitionDate ? new Date(deal.acquisitionDate) : new Date();
+  sheet.getCell('G10').value = acquisitionDate;
   sheet.getCell('G10').numFmt = 'dd/mm/yyyy';
   
   sheet.getCell('B11').value = 'Holding Period (months)';
@@ -116,7 +118,8 @@ function createAssumptionsSheet(workbook: ExcelJS.Workbook, deal: any, inputs: a
   sheet.getCell('M4').font = { bold: true, size: 12 };
   
   sheet.getCell('M10').value = 'Purchase Price';
-  sheet.getCell('N10').value = parseFloat(deal.dealSize || deal.purchasePrice || '0') * 1000000;
+  const dealSize = parseFloat(deal.dealSize || deal.purchasePrice || '0');
+  sheet.getCell('N10').value = dealSize * 1000000;
   sheet.getCell('N10').numFmt = '$#,##0';
   
   sheet.getCell('M11').value = 'Transaction Fees';
@@ -236,8 +239,9 @@ function createDebtModelSheet(workbook: ExcelJS.Workbook, inputs: any) {
   sheet.getCell('C3').numFmt = 'mmm-yy';
   sheet.getCell('C4').value = 0;
   
-  // Create periods
-  for (let i = 1; i <= numPeriods; i++) {
+  // Create periods (limit to reasonable number)
+  const maxPeriods = Math.min(numPeriods, 120); // Limit to 10 years monthly or 120 years annually
+  for (let i = 1; i <= maxPeriods; i++) {
     const col = String.fromCharCode(67 + i); // D, E, F, etc.
     
     // Date
@@ -250,7 +254,7 @@ function createDebtModelSheet(workbook: ExcelJS.Workbook, inputs: any) {
   }
   
   // Interest rate (constant across all periods)
-  for (let i = 0; i <= numPeriods; i++) {
+  for (let i = 0; i <= maxPeriods; i++) {
     const col = String.fromCharCode(67 + i);
     sheet.getCell(`${col}6`).value = { formula: '=Assumptions!G17+Assumptions!G18' };
     sheet.getCell(`${col}6`).numFmt = '0.00%';
@@ -266,20 +270,20 @@ function createDebtModelSheet(workbook: ExcelJS.Workbook, inputs: any) {
   
   // Subsequent periods
   const periodsPerYear = isMonthly ? 12 : 1;
-  for (let i = 1; i <= numPeriods; i++) {
+  for (let i = 1; i <= maxPeriods; i++) {
     const col = String.fromCharCode(67 + i);
     const prevCol = String.fromCharCode(66 + i);
     
     sheet.getCell(`${col}8`).value = { formula: `=${prevCol}12` };
     sheet.getCell(`${col}9`).value = 0;
     sheet.getCell(`${col}10`).value = { formula: `=${col}8*${col}6/${periodsPerYear}` };
-    sheet.getCell(`${col}11`).value = i === numPeriods ? { formula: `=${col}8` } : 0;
+    sheet.getCell(`${col}11`).value = i === maxPeriods ? { formula: `=${col}8` } : 0;
     sheet.getCell(`${col}12`).value = { formula: `=${col}8+${col}9-${col}10-${col}11` };
   }
   
   // Format numbers
   for (let row = 8; row <= 12; row++) {
-    for (let i = 0; i <= numPeriods; i++) {
+    for (let i = 0; i <= maxPeriods; i++) {
       const col = String.fromCharCode(67 + i);
       sheet.getCell(`${col}${row}`).numFmt = '$#,##0';
     }

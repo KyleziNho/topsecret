@@ -53,7 +53,8 @@ export function ModelBuilder({ deal, onOpenChat }: ModelBuilderProps) {
       await generateExcelModel(deal, fullInputs);
     } catch (error) {
       console.error('Error generating model:', error);
-      alert('Error generating Excel file. Please check your inputs and try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Error generating Excel file: ${errorMessage}\nPlease check your inputs and try again.`);
     } finally {
       setIsGenerating(false);
     }
